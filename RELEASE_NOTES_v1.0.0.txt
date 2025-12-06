@@ -1,0 +1,37 @@
+VisionTrack UI Kit v1.0.0
+
+🎉 What’s New
+- Real-time facial recognition with face-api.js (TinyFaceDetector)
+- Role-based dashboards for Admin and Employee
+- JWT authentication with automatic role redirect
+- Attendance marking page with one-click submission (no confirmation flow)
+- Attendance history table with date/time/status
+- Face verification flow with overlay guidance and status toasts
+- 40+ shadcn/ui components with Tailwind styling
+- Full Django REST Framework integration (user-role, employee check, face upload, mark attendance, attendance history)
+
+🛠 Fixes / Improvements
+- Correct employee name retrieval from backend
+- Robust error handling and toasts for API failures
+- Removed Lovable platform dependencies and tagger plugin
+- Back navigation to home and navbar attendance link
+
+🚨 Breaking Changes
+- None (initial stable release)
+
+📦 Install / Run
+npm install
+npm run dev        # http://localhost:8080
+npm run build      # production build in dist/
+
+🔗 Links
+- Repo: https://github.com/Muhammad-Bilal-77/visiontrack-ui-kit
+- Docs: https://github.com/Muhammad-Bilal-77/visiontrack-ui-kit/blob/main/DETAILED_README.md
+- Issues: https://github.com/Muhammad-Bilal-77/visiontrack-ui-kit/issues
+
+✅ Checklist
+- [x] Face detection/verification
+- [x] Attendance marking & history
+- [x] Role-based layouts (admin/employee)
+- [x] JWT auth + redirects
+- [x] Deployment-ready build

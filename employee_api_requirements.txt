@@ -1,0 +1,177 @@
+Employee Module API Requirements
+================================
+
+Purpose
+-------
+Support dynamic functionality of `src/pages/Employees.tsx`: list, search, create, and toggle active/inactive status for employees. All endpoints are protected; require valid admin/superuser JWT.
+
+Authentication
+--------------
+Header: `Authorization: JWT <access_token>`
+Errors:
+- 401 Unauthorized: `{ "detail": "Authentication credentials were not provided." }` (Frontend redirects to `/login`)
+- 403 Forbidden: `{ "detail": "You do not have permission to perform this action." }` (Frontend may redirect to `/`)
+
+Employee Data Model (Recommended)
+---------------------------------
+Fields:
+- `id`: string (UUID or numeric ID serialized to string)
+- `empId`: string (company-specific employee identifier, unique)
+- `first_name`: string
+- `last_name`: string
+- `name`: string (convenience; concatenation of first + last; optional but helpful)
+- `email`: string (unique)
+- `role`: string (e.g. `Employee`, `Manager`, `Admin`)
+- `status`: `Active` | `Inactive`
+- `photo_url`: string | null (public URL to photo)
+- `created_at`: ISO 8601 timestamp
+- `updated_at`: ISO 8601 timestamp
+
+List / Search Employees
+-----------------------
+Endpoint: `GET /api/employees/?search=<query>`
+Query Parameters:
+- `search` (optional) matches `first_name`, `last_name`, `empId`, `email` (case-insensitive substring)
+Response (Paginated):
+```
+{
+  "results": [
+    {
+      "id": "42",
+      "empId": "EMP042",
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "name": "Jane Doe",
+      "email": "jane.doe@example.com",
+      "role": "Employee",
+      "status": "Active",
+      "photo_url": "https://cdn.example.com/photos/EMP042.jpg",
+      "created_at": "2025-12-01T09:33:12Z",
+      "updated_at": "2025-12-01T10:01:55Z"
+    }
+  ],
+  "count": 120,
+  "next": "/api/employees/?page=2",
+  "previous": null
+}
+```
+Error Examples:
+- 401: `{ "detail": "Authentication credentials were not provided." }`
+- 403: `{ "detail": "You do not have permission to perform this action." }`
+
+Create Employee
+---------------
+Endpoint: `POST /api/employees/`
+Content-Type: `multipart/form-data`
+Form Fields:
+- `first_name` (string, required)
+- `last_name` (string, required)
+- `email` (string, required, unique)
+- `empId` (string, required, unique)
+- `role` (string, optional, default: `Employee`)
+- `photo` (file, optional)
+Successful Response:
+```
+{
+  "success": true,
+  "data": {
+    "id": "121",
+    "empId": "EMP121",
+    "first_name": "Alan",
+    "last_name": "Turing",
+    "name": "Alan Turing",
+    "email": "alan.turing@example.com",
+    "role": "Employee",
+    "status": "Active",
+    "photo_url": "https://cdn.example.com/photos/EMP121.png",
+    "created_at": "2025-12-01T11:04:22Z",
+    "updated_at": "2025-12-01T11:04:22Z"
+  },
+  "message": "Employee created"
+}
+```
+Validation Error (400/422):
+```
+{
+  "success": false,
+  "message": "empId already exists",
+  "errors": { "empId": ["Already taken"] }
+}
+```
+
+Toggle Status (Activate / Deactivate)
+------------------------------------
+Endpoint: `PATCH /api/employees/{id}/`
+Content-Type: `application/json` (preferred if no file upload)
+Request Body:
+```
+{ "status": "Inactive" }
+```
+Response:
+```
+{
+  "success": true,
+  "data": {
+    "id": "42",
+    "status": "Inactive",
+    "updated_at": "2025-12-01T12:15:09Z"
+  }
+}
+```
+Notes:
+- Only `status` may be present for toggle; other fields remain unchanged.
+- Status values must be exactly `Active` or `Inactive` (case-sensitive) to match frontend styling.
+
+Single Employee
+---------------
+Endpoint: `GET /api/employees/{id}/`
+Response: full Employee object (same schema as list item).
+
+Delete Employee (Optional)
+-------------------------
+Endpoint: `DELETE /api/employees/{id}/`
+Response:
+```
+{ "success": true, "message": "Employee deleted" }
+```
+Frontend currently does not expose delete; endpoint optional.
+
+Error Handling Conventions
+--------------------------
+Recommended standard for non-2xx responses:
+- Authentication: `401` + `{ "detail": "Authentication credentials were not provided." }`
+- Forbidden: `403` + `{ "detail": "You do not have permission to perform this action." }`
+- Validation: `400/422` + `{ "success": false, "message": "<summary>", "errors": { <field>: ["message"] } }`
+- Generic server error: `500` + `{ "detail": "Internal server error" }`
+
+Photo Upload
+------------
+- Field name: `photo`
+- Accepted types: `image/jpeg`, `image/png`
+- Max size recommendation: <= 5MB
+- Return `photo_url` accessible by browser (CORS enabled if different domain)
+
+Front-End Expectations
+----------------------
+- After create success: new employee appears in subsequent list fetch; component calls `employeeService.getAll()`.
+- Searching uses `?search=`; returns filtered paginated list.
+- Status toggle immediately returns updated status; no full object required but acceptable.
+- For improved efficiency, backend may return updated full object on status toggle; frontend will merge.
+
+Optional Enhancements
+---------------------
+- Pagination query params: `?page=<n>&page_size=<n>`
+- Sorting: `?ordering=first_name` or `-created_at`
+- Bulk activation/deactivation endpoint: `POST /api/employees/bulk/status/` with body `{ "ids": ["1","2"], "status": "Inactive" }`
+- Include `total_active`, `total_inactive` summary endpoint for dashboard quick counts.
+
+Backend Implementation Tips
+---------------------------
+- Normalize name input: trim whitespace; store canonical case (e.g. capitalize).
+- Enforce unique constraints on `empId`, `email`.
+- Perform injection filtering on `search` (Django ORM icontains is safe).
+- For performance on large datasets, index `empId`, `email`, `first_name`, `last_name`.
+
+Summary
+-------
+Implement listed endpoints and JSON shapes to enable fully dynamic employee management: list/search, create with photo, activate/deactivate. Ensure consistent auth error messages and strict status values.

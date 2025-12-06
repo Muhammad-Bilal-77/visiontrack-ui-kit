@@ -1,0 +1,254 @@
+import { ReactNode, useEffect, useState } from "react";
+import { apiRequest, API_ENDPOINTS } from "@/config/api";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { 
+  LayoutDashboard, 
+  Users, 
+  Clock, 
+  FileText, 
+  Settings,
+  Scan,
+  LogOut
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+
+interface AdminLayoutProps {
+  children: ReactNode;
+}
+
+interface UserRoleResponse {
+  success: boolean;
+  data: {
+    userId: string;
+    email: string;
+    role: string;
+  };
+  message: string;
+}
+
+const menuItems = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin" },
+  { icon: Users, label: "Employees", path: "/employees" },
+  { icon: FileText, label: "Reports", path: "/reports" },
+  { icon: LayoutDashboard, label: "Home", path: "/" },
+];
+
+const AdminLayout = ({ children }: AdminLayoutProps) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [adminName, setAdminName] = useState<string>("Admin User");
+  const [adminEmail, setAdminEmail] = useState<string>("admin@visiontrack.com");
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [isCheckingRole, setIsCheckingRole] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    
+    // First check user role
+    const checkUserRole = async () => {
+      try {
+        const response = await fetch('https://premier-paula-evolvoria-acf84abc.koyeb.app/core/api/user-role/', {
+          method: 'GET',
+          headers: {
+            'Authorization': `JWT ${localStorage.getItem('auth_token')}`
+          }
+        });
+
+        const result: UserRoleResponse = await response.json();
+        
+        if (!mounted) return;
+
+        if (result.success && result.data.role === 'admin') {
+          setIsAuthorized(true);
+          setAdminName(result.data.email.split('@')[0] || 'Admin User');
+          setAdminEmail(result.data.email);
+        } else if (result.success && result.data.role === 'employee') {
+          // User is employee, not authorized
+          setIsAuthorized(false);
+          toast({
+            title: "Access Denied",
+            description: "You are not authorized to access the admin panel.",
+            variant: "destructive"
+          });
+          setTimeout(() => {
+            navigate('/login');
+          }, 1500);
+        } else {
+          setIsAuthorized(false);
+        }
+      } catch (err) {
+        console.error('Error checking user role:', err);
+        setIsAuthorized(false);
+        toast({
+          title: "Error",
+          description: "Failed to verify access permissions.",
+          variant: "destructive"
+        });
+        setTimeout(() => {
+          navigate('/login');
+        }, 1500);
+      } finally {
+        if (mounted) {
+          setIsCheckingRole(false);
+        }
+      }
+    };
+
+    checkUserRole();
+
+    return () => {
+      mounted = false;
+    };
+  }, [navigate, toast]);
+
+  // Show loading state while checking role
+  if (isCheckingRole) {
+    return (
+      <div className="min-h-screen bg-muted/30 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-primary"></div>
+      </div>
+    );
+  }
+
+  // If not authorized, don't render the layout
+  if (!isAuthorized) {
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen bg-muted/30">
+      {/* Mobile overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 h-screen w-64 bg-card border-r border-border z-40 transition-transform duration-200",
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        )}
+      >
+        <div className="p-6 flex items-center justify-between md:justify-start md:gap-2">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
+              <Scan className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              VisionTrack
+            </span>
+          </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Close menu"
+          >
+            ✕
+          </Button>
+        </div>
+
+        <nav className="px-4 space-y-2">
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+            return (
+              <Link key={item.path} to={item.path} onClick={() => setIsSidebarOpen(false)}>
+                <Button
+                  variant={isActive ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start gap-3",
+                    isActive && "bg-primary/10 text-primary hover:bg-primary/20"
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  {item.label}
+                </Button>
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="absolute bottom-6 left-4 right-4">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => {
+              try {
+                localStorage.removeItem('auth_token');
+                localStorage.removeItem('refresh_token');
+                localStorage.removeItem('user_role');
+
+                if (typeof document !== 'undefined') {
+                  document.cookie = 'access_token=; Max-Age=0; path=/;';
+                  document.cookie = 'refresh_token=; Max-Age=0; path=/;';
+                }
+              } catch (e) {
+                /* noop */
+              }
+              window.location.href = '/login';
+            }}
+          >
+            <LogOut className="w-5 h-5" />
+            Logout
+          </Button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className="md:ml-64">
+        {/* Top Bar */}
+        <header className="sticky top-0 z-20 bg-background/80 backdrop-blur-md border-b border-border">
+          <div className="px-4 py-3 md:px-8 md:py-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setIsSidebarOpen(true)}
+                aria-label="Open menu"
+              >
+                ☰
+              </Button>
+              <h1 className="text-xl md:text-2xl font-bold">Admin Dashboard</h1>
+            </div>
+            <div className="flex items-center gap-3 md:gap-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:inline-flex"
+                onClick={() => navigate('/')}
+              >
+                Home
+              </Button>
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
+                  <span className="text-white font-semibold">{adminName?.[0] ?? 'A'}</span>
+                </div>
+                <div className="hidden sm:block">
+                  <p className="text-sm font-medium truncate max-w-[140px] md:max-w-none">{adminName}</p>
+                  <p className="text-xs text-muted-foreground truncate max-w-[140px] md:max-w-none">{adminEmail}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="p-4 md:p-8">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default AdminLayout;
